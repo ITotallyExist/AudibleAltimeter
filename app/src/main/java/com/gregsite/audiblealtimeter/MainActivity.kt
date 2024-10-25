@@ -5,6 +5,7 @@ import android.view.Window
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Column
@@ -17,6 +18,8 @@ import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
@@ -27,9 +30,11 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.gregsite.audiblealtimeter.ui.theme.AudibleAltimeterTheme
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 class MainActivity : ComponentActivity() {
-    private var calibration = 0; //current calibration altitude
+    private var calibrationAlt = 0f; //current calibration altitude
 
     private var usingFeet = true; //true for feet, false for meters
 
@@ -52,12 +57,12 @@ class MainActivity : ComponentActivity() {
 
     //set altimeter calibration to MSL
     fun setCalibrationMSL(){
-        this.calibration = 0;
+        this.calibrationAlt = 0f;
     }
 
     //set altimeter calibration to current location
     fun setCalibrationCurrent(){
-        this.calibration = getCurrentAlt();
+        this.calibrationAlt = getCurrentAlt();
     }
 
     //set units to feet (true) or meters (false)
@@ -79,6 +84,18 @@ class MainActivity : ComponentActivity() {
     fun setAnnouncementDelay(delay: Float){
         this.delayTime = delay;
     }
+
+    fun getRoundedUnitCalibratedAlt(): Int{
+        return Math.round(this.getUnitCalibratedAlt()/this.precision) * this.precision;
+    }
+
+    fun getUnitCalibratedAlt(): Float{
+        if (usingFeet){
+            return (convertToFt(getCurrentAlt()) - this.calibrationAlt);
+        } else {
+            return (getCurrentAlt() - this.calibrationAlt);
+        }
+    }
 }
 
 //basic styling
@@ -86,17 +103,21 @@ class MainActivity : ComponentActivity() {
     //modifiers
 val outerGridModifier = Modifier.border(width= 2.dp, color = Color.Black).background(Color.LightGray);
 val innerGridModifier = Modifier.border(width= 2.dp, color = Color.DarkGray).background(Color.LightGray);
-val buttonModifier = Modifier.padding(4.dp)
+val buttonModifier = Modifier.padding(6.dp)
 
     //shapes
 val buttonShape = CutCornerShape(4.dp);
+
+    //colors
+val selectedColor = Color.Blue;
 
 fun convertToFt(numberInMeters: Float): Float{
     return (numberInMeters*3.28084f);
 }
 
-fun getCurrentAlt(): Int {
-    return (5);
+fun getCurrentAlt(): Float {
+    //TODO
+    return (5f);
 }
 
 fun fullscreenMode(window: Window) {
@@ -122,10 +143,21 @@ fun MainLayout(mainActivity: MainActivity) {
                 //header
                 Text("Set zero point", textAlign = TextAlign.Center, modifier = innerGridModifier.fillMaxWidth())
 
-                Button(modifier = buttonModifier.fillMaxHeight(0.5f).fillMaxWidth(), shape = buttonShape, onClick = {mainActivity.setCalibrationMSL()}){
+                //to show which button is selected (adjusts the border width to give selected button a border)
+                var mslSelected by remember { mutableStateOf(2.dp) }
+                var currentSelected by remember { mutableStateOf(0.dp) }
+
+                Button(modifier = buttonModifier.fillMaxHeight(0.5f).fillMaxWidth(), shape = buttonShape, onClick = {mainActivity.setCalibrationMSL();
+                    mslSelected = 2.dp;
+                    currentSelected = 0.dp;
+                                                                                                                    }, border = BorderStroke(mslSelected, selectedColor)){
                     Text("Calibrate to MSL")
                 }
-                Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(), shape = buttonShape, onClick = {mainActivity.setCalibrationCurrent()}){
+                Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(), shape = buttonShape, onClick = {
+                    mainActivity.setCalibrationCurrent();
+                    mslSelected = 0.dp;
+                    currentSelected = 2.dp;
+                                                                                                                }, border = BorderStroke(currentSelected, selectedColor)){
                     Text("Calibrate to current altitude")
                 }
             }
@@ -136,10 +168,22 @@ fun MainLayout(mainActivity: MainActivity) {
                     Text("Select units", textAlign = TextAlign.Center, modifier = innerGridModifier.fillMaxWidth())
                     //choices
                     Column (modifier = Modifier.fillMaxHeight().fillMaxWidth()){
-                        Button(modifier = buttonModifier.fillMaxHeight(0.5f).fillMaxWidth(), shape = buttonShape, onClick = {mainActivity.setUsingFeet(true)}){
+                        //to show which button is selected (adjusts the border width to give selected button a border)
+                        var feetSelected by remember { mutableStateOf(2.dp) }
+                        var metersSelected by remember { mutableStateOf(0.dp) }
+
+                        Button(modifier = buttonModifier.fillMaxHeight(0.5f).fillMaxWidth(), shape = buttonShape, onClick = {
+                            mainActivity.setUsingFeet(true);
+                            feetSelected = 2.dp;
+                            metersSelected = 0.dp;
+                                                                                                                            }, border = BorderStroke(feetSelected, selectedColor)){
                             Text("Feet")
                         }
-                        Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(), shape = buttonShape, onClick = {mainActivity.setUsingFeet(false)}){
+                        Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(), shape = buttonShape, onClick = {
+                            mainActivity.setUsingFeet(false);
+                            feetSelected = 0.dp;
+                            metersSelected = 2.dp;
+                                                                                                                        }, border = BorderStroke(metersSelected, selectedColor)){
                             Text("Meters")
                         }
                     }
@@ -162,20 +206,47 @@ fun MainLayout(mainActivity: MainActivity) {
 
                     //buttons
                     Row(modifier = innerGridModifier.fillMaxHeight().fillMaxWidth()){
+                        var selected1 by remember { mutableStateOf(0.dp) }
+                        var selected5 by remember { mutableStateOf(0.dp) }
+                        var selected10 by remember { mutableStateOf(2.dp) }
+                        var selected100 by remember { mutableStateOf(0.dp) }
+
                         Column(modifier = innerGridModifier.fillMaxHeight().fillMaxWidth()) {
                             Row(modifier = Modifier.fillMaxHeight(0.5f).fillMaxWidth()) {
-                                Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(0.5f), shape = buttonShape, onClick = { mainActivity.setAnnouncementPrecision(1) }) {
+                                Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(0.5f), shape = buttonShape, onClick = {
+                                    mainActivity.setAnnouncementPrecision(1);
+                                    selected1 = 2.dp;
+                                    selected5 = 0.dp;
+                                    selected10 = 0.dp;
+                                    selected100 = 0.dp;
+                                }, border = BorderStroke(selected1, selectedColor)) {
                                     Text("1")
                                 }
-                                Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(), shape = buttonShape, onClick = { mainActivity.setAnnouncementPrecision(5) }) {
+                                Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(), shape = buttonShape, onClick = {
+                                    mainActivity.setAnnouncementPrecision(5);
+                                    selected1 = 0.dp;
+                                    selected5 = 2.dp;
+                                    selected10 = 0.dp;
+                                    selected100 = 0.dp;
+                                }, border = BorderStroke(selected5, selectedColor)) {
                                     Text("5")
                                 }
                             }
                             Row(modifier = Modifier.fillMaxHeight().fillMaxWidth()) {
-                                Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(0.5f), shape = buttonShape, onClick = { mainActivity.setAnnouncementPrecision(10) }) {
+                                Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(0.5f), shape = buttonShape, onClick = {
+                                    mainActivity.setAnnouncementPrecision(10);
+                                    selected1 = 0.dp;
+                                    selected5 = 0.dp;
+                                    selected10 = 2.dp;
+                                    selected100 = 0.dp; }, border = BorderStroke(selected10, selectedColor)) {
                                     Text("10")
                                 }
-                                Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(), shape = buttonShape, onClick = { mainActivity.setAnnouncementPrecision(100) }) {
+                                Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(), shape = buttonShape, onClick = {
+                                    mainActivity.setAnnouncementPrecision(100);
+                                    selected1 = 0.dp;
+                                    selected5 = 0.dp;
+                                    selected10 = 0.dp;
+                                    selected100 = 2.dp; }, border = BorderStroke(selected100, selectedColor)) {
                                     Text("100")
                                 }
                             }
@@ -187,22 +258,49 @@ fun MainLayout(mainActivity: MainActivity) {
                 Column (innerGridModifier.fillMaxHeight().fillMaxWidth()) {
                     //header (height is one quarter of the voice area's height, but we need to account for the earlier header)
                     Text("Delay between announcements", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-
+                    var selected0 by remember { mutableStateOf(0.dp) }
+                    var selected5 by remember { mutableStateOf(0.dp) }
+                    var selected15 by remember { mutableStateOf(0.dp) }
+                    var selected60 by remember { mutableStateOf(2.dp) }
                     //buttons
                     Column(modifier = innerGridModifier.fillMaxHeight().fillMaxWidth()) {
                         Row(modifier = Modifier.fillMaxHeight(0.5f).fillMaxWidth()) {
-                            Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(0.5f), shape = buttonShape, onClick = { mainActivity.setAnnouncementDelay(0f) }) {
+                            Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(0.5f), shape = buttonShape, onClick = {
+                                mainActivity.setAnnouncementDelay(0f);
+                                selected0 = 2.dp;
+                                selected5 = 0.dp;
+                                selected15 = 0.dp;
+                                selected60 = 0.dp;
+                            }, border = BorderStroke(selected0, selectedColor)) {
                                 Text("0s")
                             }
-                            Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(), shape = buttonShape, onClick = { mainActivity.setAnnouncementDelay(5f) }) {
+                            Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(), shape = buttonShape, onClick = {
+                                mainActivity.setAnnouncementDelay(5f);
+                                selected0 = 0.dp;
+                                selected5 = 2.dp;
+                                selected15 = 0.dp;
+                                selected60 = 0.dp;
+                            }, border = BorderStroke(selected5, selectedColor)) {
                                 Text("5s")
                             }
                         }
                         Row(modifier = Modifier.fillMaxHeight().fillMaxWidth()) {
-                            Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(0.5f), shape = buttonShape, onClick = { mainActivity.setAnnouncementDelay(15f) }) {
+                            Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(0.5f), shape = buttonShape, onClick = {
+                                mainActivity.setAnnouncementDelay(15f);
+                                selected0 = 0.dp;
+                                selected5 = 0.dp;
+                                selected15 = 2.dp;
+                                selected60 = 0.dp;
+                            }, border = BorderStroke(selected15, selectedColor)) {
                                 Text("15s")
                             }
-                            Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(), shape = buttonShape, onClick = { mainActivity.setAnnouncementDelay(60f) }) {
+                            Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(), shape = buttonShape, onClick = {
+                                mainActivity.setAnnouncementDelay(60f);
+                                selected0 = 0.dp;
+                                selected5 = 0.dp;
+                                selected15 = 0.dp;
+                                selected60 = 2.dp;
+                            }, border = BorderStroke(selected60, selectedColor)) {
                                 Text("60s")
                             }
                         }
