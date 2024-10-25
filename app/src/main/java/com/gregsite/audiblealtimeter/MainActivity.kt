@@ -52,7 +52,9 @@ class MainActivity : ComponentActivity() {
     private var locationClient: FusedLocationProviderClient? = null;
 
     private var gpsAlt = 0f; //raw altitude from GPS data
-    //private var displayAlt by remember { mutableStateOf(0) }//altitude to display in app
+
+    //holds all the ui data for composing
+    var gpsAltDisplay by mutableStateOf("0"); //data to be displayed by the ui
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -62,33 +64,37 @@ class MainActivity : ComponentActivity() {
         //hide navigation bars
         fullscreenMode(window)
 
+        //set variable to dynamically update the displayed altitude
+
+
         setContent {
             AudibleAltimeterTheme {
-                MainLayout(this);
+                MainLayout(this, gpsAltDisplay);
             }
         }
 
         this.locationClient = LocationServices.getFusedLocationProviderClient(this)
 
         //loop to continuously update the gps altitude
-        Timer().schedule(createGPSUpdateTask(this),0,500)
+        //Timer().schedule(createGPSUpdateTask(this), 0, 500)
 
         //TODO:loop to coninuously do the voice output
     }
 
     //set altimeter calibration to MSL
-    fun setCalibrationMSL(){
+    fun setCalibrationMSL() {
         this.calibrationAlt = 0f;
     }
 
     //set altimeter calibration to current location
-    fun setCalibrationCurrent(){
+    fun setCalibrationCurrent() {
         this.calibrationAlt = this.gpsAlt;
     }
 
     //set units to feet (true) or meters (false)
-    fun setUsingFeet(valueToSet: Boolean){
+    fun setUsingFeet(valueToSet: Boolean) {
         this.usingFeet = valueToSet;
+        this.gpsAltDisplay="tomato"
     }
 
     //returns true if using feet
@@ -97,28 +103,29 @@ class MainActivity : ComponentActivity() {
     }
 
     //set the precision of the announcements
-    fun setAnnouncementPrecision(roundTo: Int){
+    fun setAnnouncementPrecision(roundTo: Int) {
         this.precision = roundTo;
+        this.gpsAltDisplay="weewees"
     }
 
     //sets the delay between announcements
-    fun setAnnouncementDelay(delay: Float){
+    fun setAnnouncementDelay(delay: Float) {
         this.delayTime = delay;
     }
 
-    fun getRoundedUnitCalibratedAlt(): Int{
-        return Math.round(this.getUnitCalibratedAlt()/this.precision) * this.precision;
+    fun getRoundedUnitCalibratedAlt(): Int {
+        return Math.round(this.getUnitCalibratedAlt() / this.precision) * this.precision;
     }
 
-    fun getUnitCalibratedAlt(): Float{
-        if (usingFeet){
+    fun getUnitCalibratedAlt(): Float {
+        if (usingFeet) {
             return (convertToFt(this.gpsAlt) - this.calibrationAlt);
         } else {
             return (this.gpsAlt - this.calibrationAlt);
         }
     }
 
-    fun createGPSUpdateTask(mainActivity: MainActivity) = object : TimerTask() {
+    private fun createGPSUpdateTask(mainActivity: MainActivity) = object : TimerTask() {
         override fun run() {
             mainActivity.updateCurrentGPSAlt();
         }
@@ -135,11 +142,13 @@ class MainActivity : ComponentActivity() {
                 Manifest.permission.ACCESS_COARSE_LOCATION
             ) != PackageManager.PERMISSION_GRANTED
         ) {
-            ActivityCompat.requestPermissions(this,
+            ActivityCompat.requestPermissions(
+                this,
                 arrayOf(
                     Manifest.permission.ACCESS_FINE_LOCATION,
                 ),
-                99);
+                99
+            );
             // TODO: Consider calling
             //    ActivityCompat#requestPermissions
             // here to request the missing permissions, and then overriding
@@ -149,18 +158,20 @@ class MainActivity : ComponentActivity() {
             // for ActivityCompat#requestPermissions for more details.
             return
         }
-        if (this.locationClient != null){
-            this.locationClient!!.getCurrentLocation(1,null).addOnSuccessListener { location : Location? ->
-                if (location != null){
-                    if (location.hasAltitude()){
-                        this.gpsAlt = location.altitude.toFloat();
+        if (this.locationClient != null) {
+            this.locationClient!!.getCurrentLocation(1, null)
+                .addOnSuccessListener { location: Location? ->
+                    if (location != null) {
+                        if (location.hasAltitude()) {
+                            this.gpsAlt = location.altitude.toFloat();
+                            this.gpsAltDisplay = Math.round(this.gpsAlt).toString();
+                        }
                     }
                 }
-            }
         }
+
     }
 }
-
 //basic styling
 
     //modifiers
@@ -190,12 +201,13 @@ fun fullscreenMode(window: Window) {
     windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE;
 }
 
+//todo: call this every time things change (button press or altitude update
 @Composable
-fun MainLayout(mainActivity: MainActivity) {
+fun MainLayout(mainActivity: MainActivity, gpsAltDisplay: String) {
     Column{
         //display
         //TODO: get this to constantly update with current altitude
-        Text("5", textAlign = TextAlign.Center, modifier = outerGridModifier.fillMaxHeight(0.5f).fillMaxWidth().wrapContentHeight(), fontSize  = 96.sp)
+        Text(gpsAltDisplay, textAlign = TextAlign.Center, modifier = outerGridModifier.fillMaxHeight(0.5f).fillMaxWidth().wrapContentHeight(), fontSize  = 96.sp)
         //measurement settings
         Row(modifier = outerGridModifier.fillMaxHeight(0.5f).fillMaxWidth().background(Color.Green)){
             //calibration
@@ -207,7 +219,8 @@ fun MainLayout(mainActivity: MainActivity) {
                 var wgs84Selected by remember { mutableStateOf(2.dp) }
                 var currentSelected by remember { mutableStateOf(0.dp) }
 
-                Button(modifier = buttonModifier.fillMaxHeight(0.5f).fillMaxWidth(), shape = buttonShape, onClick = {mainActivity.setCalibrationMSL();
+                Button(modifier = buttonModifier.fillMaxHeight(0.5f).fillMaxWidth(), shape = buttonShape, onClick = {
+                    mainActivity.setCalibrationMSL();
                     wgs84Selected = 2.dp;
                     currentSelected = 0.dp;
                                                                                                                     }, border = BorderStroke(wgs84Selected, selectedColor)){
@@ -379,6 +392,6 @@ fun MainLayout(mainActivity: MainActivity) {
 @Composable
 fun LayoutPreview() {
     AudibleAltimeterTheme {
-        MainLayout(MainActivity());
+        MainLayout(MainActivity(), "i");
     }
 }
