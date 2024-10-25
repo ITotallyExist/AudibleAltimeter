@@ -1,5 +1,8 @@
 package com.gregsite.audiblealtimeter
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.location.Location
 import android.os.Bundle
 import android.view.Window
 import androidx.activity.ComponentActivity
@@ -32,6 +35,11 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.gregsite.audiblealtimeter.ui.theme.AudibleAltimeterTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.core.app.ActivityCompat
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationServices
+import java.util.Timer
+import java.util.TimerTask
 
 class MainActivity : ComponentActivity() {
     private var calibrationAlt = 0f; //current calibration altitude
@@ -40,6 +48,12 @@ class MainActivity : ComponentActivity() {
 
     private var delayTime = 60f; //time to wait before announcing altitude again
     private var precision = 10; //precision to which altitude is rounded before being announced
+
+    private var locationClient: FusedLocationProviderClient? = null;
+
+    private var gpsAlt = 0f; //raw altitude from GPS data
+    //private var displayAlt by remember { mutableStateOf(0) }//altitude to display in app
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -53,6 +67,13 @@ class MainActivity : ComponentActivity() {
                 MainLayout(this);
             }
         }
+
+        this.locationClient = LocationServices.getFusedLocationProviderClient(this)
+
+        //loop to continuously update the gps altitude
+        Timer().schedule(createGPSUpdateTask(this),0,500)
+
+        //TODO:loop to coninuously do the voice output
     }
 
     //set altimeter calibration to MSL
@@ -62,7 +83,7 @@ class MainActivity : ComponentActivity() {
 
     //set altimeter calibration to current location
     fun setCalibrationCurrent(){
-        this.calibrationAlt = getCurrentAlt();
+        this.calibrationAlt = this.gpsAlt;
     }
 
     //set units to feet (true) or meters (false)
@@ -91,9 +112,51 @@ class MainActivity : ComponentActivity() {
 
     fun getUnitCalibratedAlt(): Float{
         if (usingFeet){
-            return (convertToFt(getCurrentAlt()) - this.calibrationAlt);
+            return (convertToFt(this.gpsAlt) - this.calibrationAlt);
         } else {
-            return (getCurrentAlt() - this.calibrationAlt);
+            return (this.gpsAlt - this.calibrationAlt);
+        }
+    }
+
+    fun createGPSUpdateTask(mainActivity: MainActivity) = object : TimerTask() {
+        override fun run() {
+            mainActivity.updateCurrentGPSAlt();
+        }
+    }
+
+    //updates the current gps altitude variable, async
+    fun updateCurrentGPSAlt() {
+
+        if (ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(this,
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                ),
+                99);
+            // TODO: Consider calling
+            //    ActivityCompat#requestPermissions
+            // here to request the missing permissions, and then overriding
+            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+            //                                          int[] grantResults)
+            // to handle the case where the user grants the permission. See the documentation
+            // for ActivityCompat#requestPermissions for more details.
+            return
+        }
+        if (this.locationClient != null){
+            this.locationClient!!.getCurrentLocation(1,null).addOnSuccessListener { location : Location? ->
+                if (location != null){
+                    if (location.hasAltitude()){
+                        this.gpsAlt = location.altitude.toFloat();
+                    }
+                }
+            }
         }
     }
 }
@@ -115,10 +178,6 @@ fun convertToFt(numberInMeters: Float): Float{
     return (numberInMeters*3.28084f);
 }
 
-fun getCurrentAlt(): Float {
-    //TODO
-    return (5f);
-}
 
 fun fullscreenMode(window: Window) {
     //get a controller object for the window insets
@@ -135,6 +194,7 @@ fun fullscreenMode(window: Window) {
 fun MainLayout(mainActivity: MainActivity) {
     Column{
         //display
+        //TODO: get this to constantly update with current altitude
         Text("5", textAlign = TextAlign.Center, modifier = outerGridModifier.fillMaxHeight(0.5f).fillMaxWidth().wrapContentHeight(), fontSize  = 96.sp)
         //measurement settings
         Row(modifier = outerGridModifier.fillMaxHeight(0.5f).fillMaxWidth().background(Color.Green)){
@@ -144,18 +204,18 @@ fun MainLayout(mainActivity: MainActivity) {
                 Text("Set zero point", textAlign = TextAlign.Center, modifier = innerGridModifier.fillMaxWidth())
 
                 //to show which button is selected (adjusts the border width to give selected button a border)
-                var mslSelected by remember { mutableStateOf(2.dp) }
+                var wgs84Selected by remember { mutableStateOf(2.dp) }
                 var currentSelected by remember { mutableStateOf(0.dp) }
 
                 Button(modifier = buttonModifier.fillMaxHeight(0.5f).fillMaxWidth(), shape = buttonShape, onClick = {mainActivity.setCalibrationMSL();
-                    mslSelected = 2.dp;
+                    wgs84Selected = 2.dp;
                     currentSelected = 0.dp;
-                                                                                                                    }, border = BorderStroke(mslSelected, selectedColor)){
-                    Text("Calibrate to MSL")
+                                                                                                                    }, border = BorderStroke(wgs84Selected, selectedColor)){
+                    Text("Calibrate to WGS84 ellipsoid")
                 }
                 Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(), shape = buttonShape, onClick = {
                     mainActivity.setCalibrationCurrent();
-                    mslSelected = 0.dp;
+                    wgs84Selected = 0.dp;
                     currentSelected = 2.dp;
                                                                                                                 }, border = BorderStroke(currentSelected, selectedColor)){
                     Text("Calibrate to current altitude")
