@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Bundle
+import android.os.Looper
 import android.util.Log
 import android.view.Window
 import androidx.activity.ComponentActivity
@@ -38,6 +39,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.core.app.ActivityCompat
 import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.Granularity
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import java.util.Timer
@@ -52,6 +57,11 @@ class MainActivity : ComponentActivity() {
     private var precision = 10; //precision to which altitude is rounded before being announced
 
     private var locationClient: FusedLocationProviderClient? = null;
+
+    val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 500)
+        .setGranularity(Granularity.GRANULARITY_FINE)
+        .setMinUpdateIntervalMillis(500) // Fastest interval for updates
+        .build()
 
     private var gpsAlt = 0f; //raw altitude from GPS data
 
@@ -120,14 +130,8 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun createGPSUpdateTask(mainActivity: MainActivity) = object : TimerTask() {
-        override fun run() {
-            mainActivity.updateCurrentGPSAlt();
-        }
-    }
-
     //updates the current gps altitude variable, async
-    fun updateCurrentGPSAlt() {
+    fun setupGPSLoop() {
         if (ActivityCompat.checkSelfPermission(
                 this,
                 Manifest.permission.ACCESS_FINE_LOCATION
@@ -147,36 +151,41 @@ class MainActivity : ComponentActivity() {
             return
         }
         if (this.locationClient != null) {
-            this.locationClient!!.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
-                .addOnSuccessListener { location: Location? ->
-                    if (location != null) {
-                        if (location.hasAltitude()) {
-                            //set the gps altitude
-                            this.gpsAlt = location.altitude.toFloat();
-
-                            //update the display
-                            this.gpsAltDisplay = Math.round(this.getUnitCalibratedAlt()).toString();
-                        }
-                    }
-                }
+            this.locationClient!!.requestLocationUpdates(locationRequest, updateGPSAltCallback, Looper.getMainLooper())
         }
 
+    }
+
+    val updateGPSAltCallback = object : LocationCallback() {
+        override fun onLocationResult(locationResult: LocationResult) {
+            val location = locationResult.lastLocation
+            if (location != null && location.hasAltitude()) {
+                //update gps altitude
+                gpsAlt = location.altitude.toFloat()
+
+                Log.d("info",gpsAlt.toString())
+
+                //update display altitude
+                gpsAltDisplay = Math.round(getUnitCalibratedAlt()).toString();
+
+            }
+        }
     }
 
     //runs the setup code, only ever runs once, to prevent starting a bunch of loops
     fun setup(){
         //see if has already been run
-        if (setupCompleted){
+        if (this.setupCompleted){
             return;
         }
 
         //to stop it from running next time
-        setupCompleted = true;
+        this.setupCompleted = true;
 
         this.locationClient = LocationServices.getFusedLocationProviderClient(this);
 
         //loop to continuously update the gps altitude
-        Timer().schedule(createGPSUpdateTask(this), 0, 500)
+        this.setupGPSLoop()
 
         //TODO:loop to coninuously do the voice output
 
