@@ -54,7 +54,7 @@ import java.util.Timer
 import java.util.TimerTask
 
 class MainActivity : ComponentActivity() {
-    private var calibrationAlt = 0f; //current calibration altitude
+    private var zeroAlt = 0f; //current zero altitude
 
     private var usingFeet = true; //true for feet, false for meters
 
@@ -97,14 +97,14 @@ class MainActivity : ComponentActivity() {
         this.setup();
     }
 
-    //set altimeter calibration to MSL
-    fun setCalibrationMSL() {
-        this.calibrationAlt = 0f;
+    //set altimeter zero to MSL
+    fun setZeroMSL() {
+        this.zeroAlt = 0f;
     }
 
-    //set altimeter calibration to current location
-    fun setCalibrationCurrent() {
-        this.calibrationAlt = this.gpsAlt;
+    //set altimeter zero to current location
+    fun setZeroCurrent() {
+        this.zeroAlt = this.gpsAlt;
     }
 
     //set units to feet (true) or meters (false)
@@ -140,9 +140,9 @@ class MainActivity : ComponentActivity() {
         }
 
         if (this.usingFeet) {
-            return (convertToFt(this.gpsAlt - this.calibrationAlt));
+            return (convertToFt(this.gpsAlt - this.zeroAlt));
         } else {
-            return (this.gpsAlt - this.calibrationAlt);
+            return (this.gpsAlt - this.zeroAlt);
         }
     }
 
@@ -307,7 +307,7 @@ fun MainLayout(mainActivity: MainActivity, gpsAltDisplay: String) {
         Text(gpsAltDisplay, textAlign = TextAlign.Center, modifier = outerGridModifier.fillMaxHeight(0.5f).fillMaxWidth().wrapContentHeight(), fontSize  = 96.sp)
         //measurement settings
         Row(modifier = outerGridModifier.fillMaxHeight(0.5f).fillMaxWidth().background(Color.Green)){
-            //calibration
+            //zero
             Column(modifier = innerGridModifier.fillMaxHeight().fillMaxWidth(0.5f)){
                 //header
                 Text("Set zero point", textAlign = TextAlign.Center, modifier = innerGridModifier.fillMaxWidth())
@@ -317,18 +317,18 @@ fun MainLayout(mainActivity: MainActivity, gpsAltDisplay: String) {
                 var currentSelected by remember { mutableStateOf(0.dp) }
 
                 Button(modifier = buttonModifier.fillMaxHeight(0.5f).fillMaxWidth(), shape = buttonShape, onClick = {
-                    mainActivity.setCalibrationMSL();
+                    mainActivity.setZeroMSL();
                     wgs84Selected = 2.dp;
                     currentSelected = 0.dp;
                                                                                                                     }, border = BorderStroke(wgs84Selected, selectedColor)){
-                    Text("Calibrate to WGS84 ellipsoid")
+                    Text("Zero at WGS84 ellipsoid")
                 }
                 Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(), shape = buttonShape, onClick = {
-                    mainActivity.setCalibrationCurrent();
+                    mainActivity.setZeroCurrent();
                     wgs84Selected = 0.dp;
                     currentSelected = 2.dp;
                                                                                                                 }, border = BorderStroke(currentSelected, selectedColor)){
-                    Text("Calibrate to current altitude")
+                    Text("Zero at current altitude")
                 }
             }
             //units
