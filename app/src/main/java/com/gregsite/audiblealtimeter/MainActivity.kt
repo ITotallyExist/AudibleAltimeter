@@ -1,8 +1,11 @@
 package com.gregsite.audiblealtimeter
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
 import android.os.Bundle
 import android.os.Looper
 import android.util.Log
@@ -37,7 +40,9 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.gregsite.audiblealtimeter.ui.theme.AudibleAltimeterTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.Granularity
 import com.google.android.gms.location.LocationCallback
@@ -56,14 +61,18 @@ class MainActivity : ComponentActivity() {
     private var delayTime = 60f; //time to wait before announcing altitude again
     private var precision = 10; //precision to which altitude is rounded before being announced
 
+    //get location through android's fused do it for you approach
     private var locationClient: FusedLocationProviderClient? = null;
-
-    val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 500)
+    val fusedLocationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 500)
         .setGranularity(Granularity.GRANULARITY_FINE)
         .setMinUpdateIntervalMillis(500) // Fastest interval for updates
         .build()
 
+    //get location directly from GPS
+    private var locationManager: LocationManager? = null
+
     private var gpsAlt = 0f; //raw altitude from GPS data
+    private var fusedAlt = 0f; //raw altitude from fused location data
 
     var gpsAltDisplay by mutableStateOf("0"); //data to be displayed by the ui
 
@@ -118,11 +127,18 @@ class MainActivity : ComponentActivity() {
         this.delayTime = delay;
     }
 
-    fun getRoundedUnitCalibratedAlt(): Int {
-        return Math.round(this.getUnitCalibratedAlt() / this.precision) * this.precision;
+    fun getRoundedUnitCalibratedAlt(useFused: Boolean): Int {
+        return Math.round(this.getUnitCalibratedAlt(useFused) / this.precision) * this.precision;
     }
 
-    fun getUnitCalibratedAlt(): Float {
+    fun getUnitCalibratedAlt(useFused: Boolean): Float {
+
+        var alt = this.gpsAlt;
+
+        if (useFused){
+            alt = this.fusedAlt
+        }
+
         if (this.usingFeet) {
             return (convertToFt(this.gpsAlt - this.calibrationAlt));
         } else {
@@ -130,8 +146,8 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    //updates the current gps altitude variable, async
-    fun setupGPSLoop() {
+    //updates the current fused altitude variable, async
+    fun setupFusedLocLoop() {
         if (ActivityCompat.checkSelfPermission(
                 this,
                 Manifest.permission.ACCESS_FINE_LOCATION
@@ -151,24 +167,86 @@ class MainActivity : ComponentActivity() {
             return
         }
         if (this.locationClient != null) {
-            this.locationClient!!.requestLocationUpdates(locationRequest, updateGPSAltCallback, Looper.getMainLooper())
+            this.locationClient!!.requestLocationUpdates(fusedLocationRequest, updateFusedAltCallback, Looper.getMainLooper())
         }
 
     }
 
-    val updateGPSAltCallback = object : LocationCallback() {
+    //callback that sets fused altitude variable and altitude that is on display
+    val updateFusedAltCallback = object : LocationCallback() {
         override fun onLocationResult(locationResult: LocationResult) {
             val location = locationResult.lastLocation
             if (location != null && location.hasAltitude()) {
+                //update altitude
+                fusedAlt = location.altitude.toFloat()
+
+                Log.d("FusedGPSAlt",fusedAlt.toString())
+
+                //update display altitude
+                gpsAltDisplay = Math.round(getUnitCalibratedAlt(true)).toString();
+
+            }
+        }
+    }
+
+    //callback that responds to updates from gps provider
+    private val gpsLocationListener = object : LocationListener {
+        override fun onLocationChanged(location: Location) {
+            if (location.hasAltitude()) {
                 //update gps altitude
                 gpsAlt = location.altitude.toFloat()
 
-                Log.d("info",gpsAlt.toString())
+                Log.d("pureGPSAlt",gpsAlt.toString())
 
                 //update display altitude
-                gpsAltDisplay = Math.round(getUnitCalibratedAlt()).toString();
-
+                gpsAltDisplay = Math.round(getUnitCalibratedAlt(false)).toString();
             }
+        }
+
+        override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+        override fun onProviderEnabled(provider: String) {}
+        override fun onProviderDisabled(provider: String) {}
+    }
+
+    fun setupGPSLoop() {
+        //set the location manager (needs to be here so that it happens after oncreate
+        this.locationManager = this.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+
+        // Check for location permissions before requesting updates
+        if (ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                ),
+                99
+            );
+
+            return
+        }
+
+        //request updates from the gps provider directly
+        this.locationManager!!.requestLocationUpdates(
+            LocationManager.GPS_PROVIDER,
+            500L,  // Time interval in milliseconds
+            0f,  // Minimum distance in meters for updates
+            gpsLocationListener
+        )
+
+
+        Log.d("i","here")
+    }
+
+    fun stopGPSUpdates() {
+        if (locationManager != null) {
+            locationManager!!.removeUpdates(gpsLocationListener)
         }
     }
 
