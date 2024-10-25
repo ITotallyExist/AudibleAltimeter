@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Bundle
+import android.util.Log
 import android.view.Window
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -38,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.core.app.ActivityCompat
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 import java.util.Timer
 import java.util.TimerTask
 
@@ -53,9 +55,9 @@ class MainActivity : ComponentActivity() {
 
     private var gpsAlt = 0f; //raw altitude from GPS data
 
-    //holds all the ui data for composing
     var gpsAltDisplay by mutableStateOf("0"); //data to be displayed by the ui
 
+    private var setupCompleted = false;
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -73,12 +75,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        this.locationClient = LocationServices.getFusedLocationProviderClient(this)
-
-        //loop to continuously update the gps altitude
-        //Timer().schedule(createGPSUpdateTask(this), 0, 500)
-
-        //TODO:loop to coninuously do the voice output
+        this.setup();
     }
 
     //set altimeter calibration to MSL
@@ -94,7 +91,6 @@ class MainActivity : ComponentActivity() {
     //set units to feet (true) or meters (false)
     fun setUsingFeet(valueToSet: Boolean) {
         this.usingFeet = valueToSet;
-        this.gpsAltDisplay="tomato"
     }
 
     //returns true if using feet
@@ -105,7 +101,6 @@ class MainActivity : ComponentActivity() {
     //set the precision of the announcements
     fun setAnnouncementPrecision(roundTo: Int) {
         this.precision = roundTo;
-        this.gpsAltDisplay="weewees"
     }
 
     //sets the delay between announcements
@@ -118,8 +113,8 @@ class MainActivity : ComponentActivity() {
     }
 
     fun getUnitCalibratedAlt(): Float {
-        if (usingFeet) {
-            return (convertToFt(this.gpsAlt) - this.calibrationAlt);
+        if (this.usingFeet) {
+            return (convertToFt(this.gpsAlt - this.calibrationAlt));
         } else {
             return (this.gpsAlt - this.calibrationAlt);
         }
@@ -133,7 +128,6 @@ class MainActivity : ComponentActivity() {
 
     //updates the current gps altitude variable, async
     fun updateCurrentGPSAlt() {
-
         if (ActivityCompat.checkSelfPermission(
                 this,
                 Manifest.permission.ACCESS_FINE_LOCATION
@@ -149,26 +143,42 @@ class MainActivity : ComponentActivity() {
                 ),
                 99
             );
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
+
             return
         }
         if (this.locationClient != null) {
-            this.locationClient!!.getCurrentLocation(1, null)
+            this.locationClient!!.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
                 .addOnSuccessListener { location: Location? ->
                     if (location != null) {
                         if (location.hasAltitude()) {
+                            //set the gps altitude
                             this.gpsAlt = location.altitude.toFloat();
-                            this.gpsAltDisplay = Math.round(this.gpsAlt).toString();
+
+                            //update the display
+                            this.gpsAltDisplay = Math.round(this.getUnitCalibratedAlt()).toString();
                         }
                     }
                 }
         }
+
+    }
+
+    //runs the setup code, only ever runs once, to prevent starting a bunch of loops
+    fun setup(){
+        //see if has already been run
+        if (setupCompleted){
+            return;
+        }
+
+        //to stop it from running next time
+        setupCompleted = true;
+
+        this.locationClient = LocationServices.getFusedLocationProviderClient(this);
+
+        //loop to continuously update the gps altitude
+        Timer().schedule(createGPSUpdateTask(this), 0, 500)
+
+        //TODO:loop to coninuously do the voice output
 
     }
 }
