@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,15 +13,22 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.gregsite.audiblealtimeter.ui.theme.AudibleAltimeterTheme
 
 class MainActivity : ComponentActivity() {
@@ -72,6 +80,16 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+//basic styling
+
+    //modifiers
+val outerGridModifier = Modifier.border(width= 2.dp, color = Color.Black).background(Color.LightGray);
+val innerGridModifier = Modifier.border(width= 2.dp, color = Color.DarkGray).background(Color.LightGray);
+val buttonModifier = Modifier.padding(4.dp)
+
+    //shapes
+val buttonShape = CutCornerShape(4.dp);
+
 fun convertToFt(numberInMeters: Float): Float{
     return (numberInMeters*3.28084f);
 }
@@ -84,33 +102,32 @@ fun getCurrentAlt(): Int {
 fun MainLayout(mainActivity: MainActivity) {
     Column{
         //display
-        Box(modifier = Modifier.fillMaxHeight(0.5f).fillMaxWidth().background(Color.Red)){
-            Text("5")
-        }
+        Text("5", textAlign = TextAlign.Center, modifier = outerGridModifier.fillMaxHeight(0.5f).fillMaxWidth().wrapContentHeight(), fontSize  = 96.sp)
         //measurement settings
-        Row(modifier = Modifier.fillMaxHeight(0.5f).fillMaxWidth().background(Color.Green)){
+        Row(modifier = outerGridModifier.fillMaxHeight(0.5f).fillMaxWidth().background(Color.Green)){
             //calibration
-            Column(modifier = Modifier.fillMaxHeight().fillMaxWidth(0.75f)){
-                Button(modifier = Modifier.fillMaxHeight(0.5f).fillMaxWidth(), onClick = {mainActivity.setCalibrationMSL()}){
-                    Text("Set zero to MSL")
+            Column(modifier = innerGridModifier.fillMaxHeight().fillMaxWidth(0.5f)){
+                //header
+                Text("Set zero point", textAlign = TextAlign.Center, modifier = innerGridModifier.fillMaxWidth())
+
+                Button(modifier = buttonModifier.fillMaxHeight(0.5f).fillMaxWidth(), shape = buttonShape, onClick = {mainActivity.setCalibrationMSL()}){
+                    Text("Calibrate to MSL")
                 }
-                Button(modifier = Modifier.fillMaxHeight().fillMaxWidth(), onClick = {mainActivity.setCalibrationCurrent()}){
-                    Text("Set zero to current altitude")
+                Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(), shape = buttonShape, onClick = {mainActivity.setCalibrationCurrent()}){
+                    Text("Calibrate to current altitude")
                 }
             }
             //units
-            Row(modifier = Modifier.fillMaxHeight().fillMaxWidth()){
+            Row(modifier = innerGridModifier.fillMaxHeight().fillMaxWidth()){
                 Column(modifier = Modifier.fillMaxHeight().fillMaxWidth()){
                     //header
-                    Box(modifier = Modifier.fillMaxHeight(0.33333f).fillMaxWidth()){
-                        Text("Select Units")
-                    }
+                    Text("Select units", textAlign = TextAlign.Center, modifier = innerGridModifier.fillMaxWidth())
                     //choices
                     Column (modifier = Modifier.fillMaxHeight().fillMaxWidth()){
-                        Button(modifier = Modifier.fillMaxHeight(0.5f).fillMaxWidth(), onClick = {mainActivity.setUsingFeet(true)}){
+                        Button(modifier = buttonModifier.fillMaxHeight(0.5f).fillMaxWidth(), shape = buttonShape, onClick = {mainActivity.setUsingFeet(true)}){
                             Text("Feet")
                         }
-                        Button(modifier = Modifier.fillMaxHeight().fillMaxWidth(), onClick = {mainActivity.setUsingFeet(false)}){
+                        Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(), shape = buttonShape, onClick = {mainActivity.setUsingFeet(false)}){
                             Text("Meters")
                         }
                     }
@@ -121,64 +138,59 @@ fun MainLayout(mainActivity: MainActivity) {
             }
         }
         //voice settings
-        Column(modifier = Modifier.fillMaxHeight().fillMaxWidth().background(Color.Blue)){
+        Column(modifier = outerGridModifier.fillMaxHeight().fillMaxWidth().background(Color.Blue)){
             //header
-            Box(modifier = Modifier.fillMaxHeight(0.25f).fillMaxWidth()){
-                Text("Voice settings")
-            }
+            Text("Voice settings", textAlign = TextAlign.Center, modifier = innerGridModifier.fillMaxWidth())
             //two sections
-            Row (modifier = Modifier.fillMaxHeight().fillMaxWidth()){
+            Row (modifier = innerGridModifier.fillMaxHeight().fillMaxWidth()){
                 //precision
-                Column (Modifier.fillMaxHeight().fillMaxWidth(0.5f)) {
+                Column (innerGridModifier.fillMaxHeight().fillMaxWidth(0.5f)) {
                     //header (height is one quarter of the voice area's height, but we need to account for the earlier header)
-                    Box(modifier = Modifier.fillMaxHeight(0.33333333333f).fillMaxWidth()){
-                        Text("Precision of announcements")
-                    }
+                    Text("Precision of announcements", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
 
                     //buttons
-                    Row(modifier = Modifier.fillMaxHeight().fillMaxWidth()){
-                        Button(modifier = Modifier.fillMaxHeight().fillMaxWidth(0.3333333333f), onClick = {mainActivity.setAnnouncementPrecision(1)}){
-                            Text("1")
-                        }
-                        Button(modifier = Modifier.fillMaxHeight().fillMaxWidth(0.5f), onClick = {mainActivity.setAnnouncementPrecision(10)}){
-                            Text("10")
-                        }
-                        Button(modifier = Modifier.fillMaxHeight().fillMaxWidth(), onClick = {mainActivity.setAnnouncementPrecision(100)}){
-                            Text("100")
+                    Row(modifier = innerGridModifier.fillMaxHeight().fillMaxWidth()){
+                        Column(modifier = innerGridModifier.fillMaxHeight().fillMaxWidth()) {
+                            Row(modifier = Modifier.fillMaxHeight(0.5f).fillMaxWidth()) {
+                                Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(0.5f), shape = buttonShape, onClick = { mainActivity.setAnnouncementPrecision(1) }) {
+                                    Text("1")
+                                }
+                                Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(), shape = buttonShape, onClick = { mainActivity.setAnnouncementPrecision(5) }) {
+                                    Text("5")
+                                }
+                            }
+                            Row(modifier = Modifier.fillMaxHeight().fillMaxWidth()) {
+                                Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(0.5f), shape = buttonShape, onClick = { mainActivity.setAnnouncementPrecision(10) }) {
+                                    Text("10")
+                                }
+                                Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(), shape = buttonShape, onClick = { mainActivity.setAnnouncementPrecision(100) }) {
+                                    Text("100")
+                                }
+                            }
                         }
                     }
 
                 }
                 //delay
-                Column (Modifier.fillMaxHeight().fillMaxWidth()) {
+                Column (innerGridModifier.fillMaxHeight().fillMaxWidth()) {
                     //header (height is one quarter of the voice area's height, but we need to account for the earlier header)
-                    Box(modifier = Modifier.fillMaxHeight(0.33333333333f).fillMaxWidth()){
-                        Text("Delay between announcements")
-                    }
+                    Text("Delay between announcements", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
 
                     //buttons
-                    Column(modifier = Modifier.fillMaxHeight().fillMaxWidth()) {
+                    Column(modifier = innerGridModifier.fillMaxHeight().fillMaxWidth()) {
                         Row(modifier = Modifier.fillMaxHeight(0.5f).fillMaxWidth()) {
-                            Button(
-                                modifier = Modifier.fillMaxHeight().fillMaxWidth(0.5f),
-                                onClick = { mainActivity.setAnnouncementDelay(0f) }) {
+                            Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(0.5f), shape = buttonShape, onClick = { mainActivity.setAnnouncementDelay(0f) }) {
                                 Text("0s")
                             }
-                            Button(
-                                modifier = Modifier.fillMaxHeight().fillMaxWidth(),
-                                onClick = { mainActivity.setAnnouncementDelay(5f) }) {
+                            Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(), shape = buttonShape, onClick = { mainActivity.setAnnouncementDelay(5f) }) {
                                 Text("5s")
                             }
                         }
                         Row(modifier = Modifier.fillMaxHeight().fillMaxWidth()) {
-                            Button(
-                                modifier = Modifier.fillMaxHeight().fillMaxWidth(0.5f),
-                                onClick = { mainActivity.setAnnouncementDelay(15f) }) {
+                            Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(0.5f), shape = buttonShape, onClick = { mainActivity.setAnnouncementDelay(15f) }) {
                                 Text("15s")
                             }
-                            Button(
-                                modifier = Modifier.fillMaxHeight().fillMaxWidth(),
-                                onClick = { mainActivity.setAnnouncementDelay(60f) }) {
+                            Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(), shape = buttonShape, onClick = { mainActivity.setAnnouncementDelay(60f) }) {
                                 Text("60s")
                             }
                         }
