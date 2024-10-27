@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import android.view.Window
 import androidx.activity.ComponentActivity
@@ -81,7 +82,7 @@ class MainActivity : ComponentActivity() {
 
     //to do the text to speech loop
     private val ttsHandler = Handler(Looper.getMainLooper())
-    private val ttsRunnable = Runnable { doTTS() }
+    private val ttsRunnable = Runnable { doTTSSpeak() }
 
     //do the actual text to speech
     private var ttsInitialised = false;
@@ -190,13 +191,8 @@ class MainActivity : ComponentActivity() {
                 //update altitude
                 fusedAlt = location.altitude.toFloat()
 
-                Log.d("FusedGPSAlt",fusedAlt.toString())
-
                 //update display altitude
                 gpsAltDisplay = Math.round(getUnitCalibratedAlt(true)).toString();
-                Log.d("FusedGPSAlt",gpsAltDisplay)
-
-
             }
         }
     }
@@ -262,9 +258,10 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    fun doTTS(){
-        if (ttsSpeaker != null) {
-            if (ttsInitialised) {
+    fun doTTSSpeak(){
+        if (ttsInitialised){
+            //if initialised
+            if (ttsSpeaker != null) {
                 ttsSpeaker!!.speak(
                     getRoundedUnitCalibratedAlt(true).toString(),
                     TextToSpeech.QUEUE_FLUSH,
@@ -274,8 +271,9 @@ class MainActivity : ComponentActivity() {
                 Log.d("tts", "loop into")
             }
         }
-        //call this again to do tts after the delay
-        ttsHandler.postDelayed((ttsRunnable),(Math.round(this.delayTime)*1000).toLong());
+
+        ttsHandler.postDelayed((ttsRunnable),(Math.round(delayTime)*1000).toLong());
+
     }
 
     //runs the setup code, only ever runs once, to prevent starting a bunch of loops
@@ -297,13 +295,28 @@ class MainActivity : ComponentActivity() {
         ttsSpeaker = TextToSpeech(this, TextToSpeech.OnInitListener { status ->
             if (status == TextToSpeech.SUCCESS) {
                 ttsInitialised = true
+
+                ttsSpeaker!!.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                    override fun onDone(utteranceId: String) {
+                        Log.d("tts","tts done");
+                        //call this again to do tts after the delay
+                        ttsHandler.postDelayed((ttsRunnable),(Math.round(delayTime)*1000).toLong());
+                    }
+
+                    override fun onError(utteranceId: String) {
+                        Log.d("tts","tts error");
+                    }
+
+                    override fun onStart(utteranceId: String) {
+                    }
+                });
             } else {
                 Log.e("TTS", "Init Failed")
             }
         });
 
         //loop to continuously do voice output
-        doTTS();
+        doTTSSpeak();
 
     }
 }
@@ -346,10 +359,10 @@ fun MainLayout(mainActivity: MainActivity, gpsAltDisplay: String) {
     Column{
         //display
         //TODO: get this to constantly update with current altitude
-        Text(gpsAltDisplay, textAlign = TextAlign.Center, modifier = outerGridModifier
+        Text(gpsAltDisplay, textAlign = TextAlign.Center, modifier = outerGridModifier.background(Color.White)
             .fillMaxHeight(0.5f)
             .fillMaxWidth()
-            .wrapContentHeight(), fontSize  = 96.sp)
+            .wrapContentHeight(), fontSize  = 150.sp)
         //measurement settings
         Row(modifier = outerGridModifier
             .fillMaxHeight(0.5f)
