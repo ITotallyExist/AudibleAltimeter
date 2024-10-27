@@ -7,7 +7,9 @@ import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
+import android.os.Handler
 import android.os.Looper
+import android.speech.tts.TextToSpeech
 import android.util.Log
 import android.view.Window
 import androidx.activity.ComponentActivity
@@ -26,23 +28,21 @@ import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.app.ActivityCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import com.gregsite.audiblealtimeter.ui.theme.AudibleAltimeterTheme
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.Granularity
 import com.google.android.gms.location.LocationCallback
@@ -50,15 +50,15 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
-import java.util.Timer
-import java.util.TimerTask
+import com.gregsite.audiblealtimeter.ui.theme.AudibleAltimeterTheme
+
 
 class MainActivity : ComponentActivity() {
     private var zeroAlt = 0f; //current zero altitude
 
     private var usingFeet = true; //true for feet, false for meters
 
-    private var delayTime = 60f; //time to wait before announcing altitude again
+    private var delayTime = 5f; //time to wait before announcing altitude again
     private var precision = 10; //precision to which altitude is rounded before being announced
 
     //get location through android's fused do it for you approach
@@ -76,7 +76,17 @@ class MainActivity : ComponentActivity() {
 
     var gpsAltDisplay by mutableStateOf("0"); //data to be displayed by the ui
 
+    //to set up the app on startup
     private var setupCompleted = false;
+
+    //to do the text to speech loop
+    private val ttsHandler = Handler(Looper.getMainLooper())
+    private val ttsRunnable = Runnable { doTTS() }
+
+    //do the actual text to speech
+    private var ttsInitialised = false;
+    private var ttsSpeaker: TextToSpeech? = null;
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -140,9 +150,9 @@ class MainActivity : ComponentActivity() {
         }
 
         if (this.usingFeet) {
-            return (convertToFt(this.gpsAlt - this.zeroAlt));
+            return (convertToFt(alt - this.zeroAlt));
         } else {
-            return (this.gpsAlt - this.zeroAlt);
+            return (alt - this.zeroAlt);
         }
     }
 
@@ -184,6 +194,8 @@ class MainActivity : ComponentActivity() {
 
                 //update display altitude
                 gpsAltDisplay = Math.round(getUnitCalibratedAlt(true)).toString();
+                Log.d("FusedGPSAlt",gpsAltDisplay)
+
 
             }
         }
@@ -250,6 +262,22 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    fun doTTS(){
+        if (ttsSpeaker != null) {
+            if (ttsInitialised) {
+                ttsSpeaker!!.speak(
+                    getRoundedUnitCalibratedAlt(true).toString(),
+                    TextToSpeech.QUEUE_FLUSH,
+                    null
+                );
+
+                Log.d("tts", "loop into")
+            }
+        }
+        //call this again to do tts after the delay
+        ttsHandler.postDelayed((ttsRunnable),(Math.round(this.delayTime)*1000).toLong());
+    }
+
     //runs the setup code, only ever runs once, to prevent starting a bunch of loops
     fun setup(){
         //see if has already been run
@@ -263,17 +291,31 @@ class MainActivity : ComponentActivity() {
         this.locationClient = LocationServices.getFusedLocationProviderClient(this);
 
         //loop to continuously update the gps altitude
-        this.setupGPSLoop()
+        this.setupFusedLocLoop()
 
-        //TODO:loop to coninuously do the voice output
+        //initialise tts
+        ttsSpeaker = TextToSpeech(this, TextToSpeech.OnInitListener { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                ttsInitialised = true
+            } else {
+                Log.e("TTS", "Init Failed")
+            }
+        });
+
+        //loop to continuously do voice output
+        doTTS();
 
     }
 }
 //basic styling
 
     //modifiers
-val outerGridModifier = Modifier.border(width= 2.dp, color = Color.Black).background(Color.LightGray);
-val innerGridModifier = Modifier.border(width= 2.dp, color = Color.DarkGray).background(Color.LightGray);
+val outerGridModifier = Modifier
+        .border(width = 2.dp, color = Color.Black)
+        .background(Color.LightGray);
+val innerGridModifier = Modifier
+    .border(width = 2.dp, color = Color.DarkGray)
+    .background(Color.LightGray);
 val buttonModifier = Modifier.padding(6.dp)
 
     //shapes
@@ -304,11 +346,19 @@ fun MainLayout(mainActivity: MainActivity, gpsAltDisplay: String) {
     Column{
         //display
         //TODO: get this to constantly update with current altitude
-        Text(gpsAltDisplay, textAlign = TextAlign.Center, modifier = outerGridModifier.fillMaxHeight(0.5f).fillMaxWidth().wrapContentHeight(), fontSize  = 96.sp)
+        Text(gpsAltDisplay, textAlign = TextAlign.Center, modifier = outerGridModifier
+            .fillMaxHeight(0.5f)
+            .fillMaxWidth()
+            .wrapContentHeight(), fontSize  = 96.sp)
         //measurement settings
-        Row(modifier = outerGridModifier.fillMaxHeight(0.5f).fillMaxWidth().background(Color.Green)){
+        Row(modifier = outerGridModifier
+            .fillMaxHeight(0.5f)
+            .fillMaxWidth()
+            .background(Color.Green)){
             //zero
-            Column(modifier = innerGridModifier.fillMaxHeight().fillMaxWidth(0.5f)){
+            Column(modifier = innerGridModifier
+                .fillMaxHeight()
+                .fillMaxWidth(0.5f)){
                 //header
                 Text("Set zero point", textAlign = TextAlign.Center, modifier = innerGridModifier.fillMaxWidth())
 
@@ -316,14 +366,18 @@ fun MainLayout(mainActivity: MainActivity, gpsAltDisplay: String) {
                 var wgs84Selected by remember { mutableStateOf(2.dp) }
                 var currentSelected by remember { mutableStateOf(0.dp) }
 
-                Button(modifier = buttonModifier.fillMaxHeight(0.5f).fillMaxWidth(), shape = buttonShape, onClick = {
+                Button(modifier = buttonModifier
+                    .fillMaxHeight(0.5f)
+                    .fillMaxWidth(), shape = buttonShape, onClick = {
                     mainActivity.setZeroMSL();
                     wgs84Selected = 2.dp;
                     currentSelected = 0.dp;
                                                                                                                     }, border = BorderStroke(wgs84Selected, selectedColor)){
                     Text("Zero at WGS84 ellipsoid")
                 }
-                Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(), shape = buttonShape, onClick = {
+                Button(modifier = buttonModifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(), shape = buttonShape, onClick = {
                     mainActivity.setZeroCurrent();
                     wgs84Selected = 0.dp;
                     currentSelected = 2.dp;
@@ -332,24 +386,34 @@ fun MainLayout(mainActivity: MainActivity, gpsAltDisplay: String) {
                 }
             }
             //units
-            Row(modifier = innerGridModifier.fillMaxHeight().fillMaxWidth()){
-                Column(modifier = Modifier.fillMaxHeight().fillMaxWidth()){
+            Row(modifier = innerGridModifier
+                .fillMaxHeight()
+                .fillMaxWidth()){
+                Column(modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth()){
                     //header
                     Text("Select units", textAlign = TextAlign.Center, modifier = innerGridModifier.fillMaxWidth())
                     //choices
-                    Column (modifier = Modifier.fillMaxHeight().fillMaxWidth()){
+                    Column (modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth()){
                         //to show which button is selected (adjusts the border width to give selected button a border)
                         var feetSelected by remember { mutableStateOf(2.dp) }
                         var metersSelected by remember { mutableStateOf(0.dp) }
 
-                        Button(modifier = buttonModifier.fillMaxHeight(0.5f).fillMaxWidth(), shape = buttonShape, onClick = {
+                        Button(modifier = buttonModifier
+                            .fillMaxHeight(0.5f)
+                            .fillMaxWidth(), shape = buttonShape, onClick = {
                             mainActivity.setUsingFeet(true);
                             feetSelected = 2.dp;
                             metersSelected = 0.dp;
                                                                                                                             }, border = BorderStroke(feetSelected, selectedColor)){
                             Text("Feet")
                         }
-                        Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(), shape = buttonShape, onClick = {
+                        Button(modifier = buttonModifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(), shape = buttonShape, onClick = {
                             mainActivity.setUsingFeet(false);
                             feetSelected = 0.dp;
                             metersSelected = 2.dp;
@@ -364,26 +428,42 @@ fun MainLayout(mainActivity: MainActivity, gpsAltDisplay: String) {
             }
         }
         //voice settings
-        Column(modifier = outerGridModifier.fillMaxHeight().fillMaxWidth().background(Color.Blue)){
+        Column(modifier = outerGridModifier
+            .fillMaxHeight()
+            .fillMaxWidth()
+            .background(Color.Blue)){
             //header
             Text("Voice settings", textAlign = TextAlign.Center, modifier = innerGridModifier.fillMaxWidth())
             //two sections
-            Row (modifier = innerGridModifier.fillMaxHeight().fillMaxWidth()){
+            Row (modifier = innerGridModifier
+                .fillMaxHeight()
+                .fillMaxWidth()){
                 //precision
-                Column (innerGridModifier.fillMaxHeight().fillMaxWidth(0.5f)) {
+                Column (
+                    innerGridModifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(0.5f)) {
                     //header (height is one quarter of the voice area's height, but we need to account for the earlier header)
                     Text("Precision of announcements", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
 
                     //buttons
-                    Row(modifier = innerGridModifier.fillMaxHeight().fillMaxWidth()){
+                    Row(modifier = innerGridModifier
+                        .fillMaxHeight()
+                        .fillMaxWidth()){
                         var selected1 by remember { mutableStateOf(0.dp) }
                         var selected5 by remember { mutableStateOf(0.dp) }
                         var selected10 by remember { mutableStateOf(2.dp) }
                         var selected100 by remember { mutableStateOf(0.dp) }
 
-                        Column(modifier = innerGridModifier.fillMaxHeight().fillMaxWidth()) {
-                            Row(modifier = Modifier.fillMaxHeight(0.5f).fillMaxWidth()) {
-                                Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(0.5f), shape = buttonShape, onClick = {
+                        Column(modifier = innerGridModifier
+                            .fillMaxHeight()
+                            .fillMaxWidth()) {
+                            Row(modifier = Modifier
+                                .fillMaxHeight(0.5f)
+                                .fillMaxWidth()) {
+                                Button(modifier = buttonModifier
+                                    .fillMaxHeight()
+                                    .fillMaxWidth(0.5f), shape = buttonShape, onClick = {
                                     mainActivity.setAnnouncementPrecision(1);
                                     selected1 = 2.dp;
                                     selected5 = 0.dp;
@@ -392,7 +472,9 @@ fun MainLayout(mainActivity: MainActivity, gpsAltDisplay: String) {
                                 }, border = BorderStroke(selected1, selectedColor)) {
                                     Text("1")
                                 }
-                                Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(), shape = buttonShape, onClick = {
+                                Button(modifier = buttonModifier
+                                    .fillMaxHeight()
+                                    .fillMaxWidth(), shape = buttonShape, onClick = {
                                     mainActivity.setAnnouncementPrecision(5);
                                     selected1 = 0.dp;
                                     selected5 = 2.dp;
@@ -402,8 +484,12 @@ fun MainLayout(mainActivity: MainActivity, gpsAltDisplay: String) {
                                     Text("5")
                                 }
                             }
-                            Row(modifier = Modifier.fillMaxHeight().fillMaxWidth()) {
-                                Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(0.5f), shape = buttonShape, onClick = {
+                            Row(modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth()) {
+                                Button(modifier = buttonModifier
+                                    .fillMaxHeight()
+                                    .fillMaxWidth(0.5f), shape = buttonShape, onClick = {
                                     mainActivity.setAnnouncementPrecision(10);
                                     selected1 = 0.dp;
                                     selected5 = 0.dp;
@@ -411,7 +497,9 @@ fun MainLayout(mainActivity: MainActivity, gpsAltDisplay: String) {
                                     selected100 = 0.dp; }, border = BorderStroke(selected10, selectedColor)) {
                                     Text("10")
                                 }
-                                Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(), shape = buttonShape, onClick = {
+                                Button(modifier = buttonModifier
+                                    .fillMaxHeight()
+                                    .fillMaxWidth(), shape = buttonShape, onClick = {
                                     mainActivity.setAnnouncementPrecision(100);
                                     selected1 = 0.dp;
                                     selected5 = 0.dp;
@@ -425,17 +513,26 @@ fun MainLayout(mainActivity: MainActivity, gpsAltDisplay: String) {
 
                 }
                 //delay
-                Column (innerGridModifier.fillMaxHeight().fillMaxWidth()) {
+                Column (
+                    innerGridModifier
+                        .fillMaxHeight()
+                        .fillMaxWidth()) {
                     //header (height is one quarter of the voice area's height, but we need to account for the earlier header)
                     Text("Delay between announcements", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                     var selected0 by remember { mutableStateOf(0.dp) }
-                    var selected5 by remember { mutableStateOf(0.dp) }
+                    var selected5 by remember { mutableStateOf(2.dp) }
                     var selected15 by remember { mutableStateOf(0.dp) }
-                    var selected60 by remember { mutableStateOf(2.dp) }
+                    var selected60 by remember { mutableStateOf(0.dp) }
                     //buttons
-                    Column(modifier = innerGridModifier.fillMaxHeight().fillMaxWidth()) {
-                        Row(modifier = Modifier.fillMaxHeight(0.5f).fillMaxWidth()) {
-                            Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(0.5f), shape = buttonShape, onClick = {
+                    Column(modifier = innerGridModifier
+                        .fillMaxHeight()
+                        .fillMaxWidth()) {
+                        Row(modifier = Modifier
+                            .fillMaxHeight(0.5f)
+                            .fillMaxWidth()) {
+                            Button(modifier = buttonModifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(0.5f), shape = buttonShape, onClick = {
                                 mainActivity.setAnnouncementDelay(0f);
                                 selected0 = 2.dp;
                                 selected5 = 0.dp;
@@ -444,7 +541,9 @@ fun MainLayout(mainActivity: MainActivity, gpsAltDisplay: String) {
                             }, border = BorderStroke(selected0, selectedColor)) {
                                 Text("0s")
                             }
-                            Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(), shape = buttonShape, onClick = {
+                            Button(modifier = buttonModifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(), shape = buttonShape, onClick = {
                                 mainActivity.setAnnouncementDelay(5f);
                                 selected0 = 0.dp;
                                 selected5 = 2.dp;
@@ -454,8 +553,12 @@ fun MainLayout(mainActivity: MainActivity, gpsAltDisplay: String) {
                                 Text("5s")
                             }
                         }
-                        Row(modifier = Modifier.fillMaxHeight().fillMaxWidth()) {
-                            Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(0.5f), shape = buttonShape, onClick = {
+                        Row(modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth()) {
+                            Button(modifier = buttonModifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(0.5f), shape = buttonShape, onClick = {
                                 mainActivity.setAnnouncementDelay(15f);
                                 selected0 = 0.dp;
                                 selected5 = 0.dp;
@@ -464,7 +567,9 @@ fun MainLayout(mainActivity: MainActivity, gpsAltDisplay: String) {
                             }, border = BorderStroke(selected15, selectedColor)) {
                                 Text("15s")
                             }
-                            Button(modifier = buttonModifier.fillMaxHeight().fillMaxWidth(), shape = buttonShape, onClick = {
+                            Button(modifier = buttonModifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(), shape = buttonShape, onClick = {
                                 mainActivity.setAnnouncementDelay(60f);
                                 selected0 = 0.dp;
                                 selected5 = 0.dp;
