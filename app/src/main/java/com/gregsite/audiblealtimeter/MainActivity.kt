@@ -114,7 +114,7 @@ class MainActivity : ComponentActivity() {
 
     //set altimeter zero to current location
     fun setZeroCurrent() {
-        this.zeroAlt = this.gpsAlt;
+        this.zeroAlt = this.fusedAlt;
     }
 
     //set units to feet (true) or meters (false)
