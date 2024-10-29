@@ -9,6 +9,8 @@ import android.location.LocationManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
+import android.os.PowerManager.WakeLock
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
@@ -88,6 +90,8 @@ class MainActivity : ComponentActivity() {
     private var ttsInitialised = false;
     private var ttsSpeaker: TextToSpeech? = null;
 
+    //thing that keeps this app awake
+    var wakeLock: WakeLock? = null;
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -318,6 +322,13 @@ class MainActivity : ComponentActivity() {
         //loop to continuously do voice output
         doTTSSpeak();
 
+        //to keep the app working if user turns off their screen
+        wakeLock =
+            (getSystemService(Context.POWER_SERVICE) as PowerManager).run {
+                newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MyApp::MyWakelockTag").apply {
+                    acquire()
+                }
+            }
     }
 }
 //basic styling
