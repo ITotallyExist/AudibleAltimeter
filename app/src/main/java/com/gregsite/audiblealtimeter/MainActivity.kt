@@ -326,7 +326,7 @@ class MainActivity : ComponentActivity() {
         wakeLock =
             (getSystemService(Context.POWER_SERVICE) as PowerManager).run {
                 newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MyApp::MyWakelockTag").apply {
-                    acquire()
+                    acquire(10*60*1000L)
                 }
             }
     }
